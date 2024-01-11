@@ -18,7 +18,7 @@ data "archive_file" "function_archive" {
 }
 
 // create the lambda function from zip file
-resource "aws_lambda_function" "function" {
+resource "aws_lambda_function" "go_dsotp_bot_lambda" {
   function_name = "go-dsotp-bot"
   description   = "A rewrite of the orginal bot but in GoLang"
   role          = aws_iam_role.lambda.arn
@@ -33,6 +33,17 @@ resource "aws_lambda_function" "function" {
 
 // create log group in cloudwatch to gather logs of our lambda function
 resource "aws_cloudwatch_log_group" "log_group" {
-  name              = "/aws/lambda/${aws_lambda_function.function.function_name}"
+  name              = "/aws/lambda/${aws_lambda_function.go_dsotp_bot_lambda.function_name}"
   retention_in_days = 7
+}
+
+resource "aws_lambda_permission" "lambda_permission" {
+  statement_id  = "AllowLambdaAPIInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.go_dsotp_bot_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  # The /*/*/* part allows invocation from any stage, method and resource path
+  # within API Gateway REST API.
+  source_arn = "${aws_api_gateway_rest_api.dsotp_bot_api.execution_arn}/*/*/*"
 }

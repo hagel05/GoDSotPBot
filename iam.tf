@@ -43,3 +43,32 @@ resource "aws_iam_role_policy_attachment" "lambda_logging_policy_attachment" {
   role       = aws_iam_role.lambda.id
   policy_arn = aws_iam_policy.function_logging_policy.arn
 }
+
+# // IAM policy for required API gateway permissions
+# resource "aws_iam_policy" "api_gateway_policy" {
+#   name        = "APIGatewayPolicy"
+#   description = "IAM policy for API Gateway"
+
+#   policy = jsonencode({
+#     Version = "2012-10-17",
+#     Statement = [
+#       {
+#         Effect = "Allow",
+#         Action = [
+#           "apigateway:PUT",
+#           "apigateway:POST",
+#           "apigateway:DELETE",
+#           "apigateway:PATCH",
+#           "apigateway:GET",
+#         ],
+#         Resource = "*",
+#       },
+#     ],
+#   })
+# }
+
+# // attach API Gateway policy to our created lambda role
+# resource "aws_iam_role_policy_attachment" "api_gateway_policy_attachment" {
+#   role       = aws_iam_role.lambda.id
+#   policy_arn = aws_iam_policy.api_gateway_policy.arn
+# }

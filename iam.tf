@@ -31,6 +31,25 @@ data "aws_iam_policy_document" "allow_lambda_logging" {
   }
 }
 
+data "aws_secretsmanager_secret" "secret" {
+  name = "prod/GoDSOTPBot"
+}
+
+data "aws_secretsmanager_secret_version" "secret_version" {
+  secret_id = data.aws_secretsmanager_secret.secret.id
+}
+
+data "aws_iam_policy_document" "lambda_secrets_policy" {
+  version = "2012-10-17"
+
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [data.aws_secretsmanager_secret_version.secret_version.arn]
+    effect    = "Allow"
+  }
+}
+
+
 // create a policy to allow writing into logs and create logs stream
 resource "aws_iam_policy" "function_logging_policy" {
   name        = "AllowLambdaLoggingPolicy"
@@ -44,31 +63,42 @@ resource "aws_iam_role_policy_attachment" "lambda_logging_policy_attachment" {
   policy_arn = aws_iam_policy.function_logging_policy.arn
 }
 
-# // IAM policy for required API gateway permissions
-# resource "aws_iam_policy" "api_gateway_policy" {
-#   name        = "APIGatewayPolicy"
-#   description = "IAM policy for API Gateway"
+resource "aws_iam_role_policy_attachment" "lambda_secrets_attachment" {
+  policy_arn = aws_iam_policy.lambda_secrets_policy.arn
+  role       = aws_iam_role.lambda.id
+}
 
-#   policy = jsonencode({
-#     Version = "2012-10-17",
-#     Statement = [
-#       {
-#         Effect = "Allow",
-#         Action = [
-#           "apigateway:PUT",
-#           "apigateway:POST",
-#           "apigateway:DELETE",
-#           "apigateway:PATCH",
-#           "apigateway:GET",
-#         ],
-#         Resource = "*",
-#       },
-#     ],
-#   })
-# }
+resource "aws_iam_policy" "lambda_secrets_policy" {
+  name        = "lambda_secrets_policy"
+  description = "Policy for Lambda to access Secrets Manager"
+  policy      = data.aws_iam_policy_document.lambda_secrets_policy.json
+}
 
-# // attach API Gateway policy to our created lambda role
-# resource "aws_iam_role_policy_attachment" "api_gateway_policy_attachment" {
-#   role       = aws_iam_role.lambda.id
-#   policy_arn = aws_iam_policy.api_gateway_policy.arn
-# }
+// IAM policy for required API gateway permissions
+resource "aws_iam_policy" "api_gateway_policy" {
+  name        = "APIGatewayPolicy"
+  description = "IAM policy for API Gateway"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "apigateway:PUT",
+          "apigateway:POST",
+          "apigateway:DELETE",
+          "apigateway:PATCH",
+          "apigateway:GET",
+        ],
+        Resource = "*",
+      },
+    ],
+  })
+}
+
+// attach API Gateway policy to our created lambda role
+resource "aws_iam_role_policy_attachment" "api_gateway_policy_attachment" {
+  role       = aws_iam_role.lambda.id
+  policy_arn = aws_iam_policy.api_gateway_policy.arn
+}

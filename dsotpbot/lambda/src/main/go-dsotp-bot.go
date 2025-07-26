@@ -127,7 +127,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	// Process the slash command
 	responseMessage := fmt.Sprintf("Received command: %s with text: %s", slashCommand.Command, slashCommand.Text)
 	if slashCommand.Command == "/draftorder" {
-		message := "1. Bill\n2. Eric\n3. CP\n4. Tony\n5. Scolson\n6. Dan\n7. Hagel\n8. Andrew\n9. TL\n10. Jared"
+		message := "1. Jared\n2. Hagel\n3. Dan\n4. Eric\n5. Scolson\n6. TL\n7. Tony\n8. Andrew\n9. Bill\n10. Collin"
 		responseMessage = fmt.Sprintf(
 			message,
 		)
@@ -137,15 +137,16 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 		responseMessage = fmt.Sprintf(message)
 		sendToSlack(slashCommand.ChannelID, message)
 	} else if slashCommand.Command == "/draftinfo" {
-		message := "Draft is usually Labor Day weekend.  Please provide me with any conflicts as soon as possible so we can schedule around it. In person drafting will depend on a variety of things."
+		// message := "Draft is usually Labor Day weekend.  Please provide me with any conflicts as soon as possible so we can schedule around it. In person drafting will depend on a variety of things."
+		message := "Draft is Sunday, August 31st at 2:00PM - Hagel House."
 		responseMessage = fmt.Sprintf(message)
 		sendToSlack(slashCommand.ChannelID, message)
 	} else if slashCommand.Command == "/champion" {
-		message := "Jared is your champion"
+		message := "Collin is your champion"
 		responseMessage = fmt.Sprintf(message)
 		sendToSlack(slashCommand.ChannelID, message)
 	} else if slashCommand.Command == "/remotedraft" {
-		message := "If unable to attend in person please go here: https://sleeper.com/draft/nfl/1051530318366318592?ftue=commish"
+		message := "If unable to attend in person please go here: https://sleeper.com/draft/nfl/1254906169265225728"
 		responseMessage = fmt.Sprintf(message)
 		sendToSlack(slashCommand.ChannelID, message)
 	} else {

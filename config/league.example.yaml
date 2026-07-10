@@ -1,0 +1,33 @@
+# DSotP league configuration.
+#
+# This is the ONLY file you edit for the annual updates: draft date/time,
+# location, draft order, punishments, and the reigning champion. Copy it to your
+# real league.yaml (mounted into the container at /config/league.yaml) and edit.
+# The bot reloads automatically when this file changes — no rebuild, no restart.
+
+season: "2025-2026"
+
+draft:
+  date: "Sunday, August 31st"
+  time: "2:00 PM"
+  location: "Hagel House"
+  remote_url: "https://sleeper.com/draft/nfl/1254906169265225728"
+
+draft_order:
+  - Jared
+  - Hagel
+  - Dan
+  - Eric
+  - Scolson
+  - TL
+  - Tony
+  - Andrew
+  - Bill
+  - Collin
+
+punishments:
+  - "First Place names the Last Place Team"
+  - "License Plate holder must be displayed from draft to end of regular season"
+  - "Last place purchases the first round of drinks at the draft"
+
+champion: "Collin"

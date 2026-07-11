@@ -15,7 +15,7 @@ import (
 )
 
 // Handler renders a response for a slash command using the current league data.
-type Handler func(cmd slack.SlashCommand, l *league.League) slack.Response
+type Handler func(command slack.SlashCommand, leagueData *league.League) slack.Response
 
 // Registry dispatches slash commands to their handlers.
 type Registry struct {
@@ -24,36 +24,36 @@ type Registry struct {
 
 // NewRegistry builds the registry with all supported commands wired up.
 func NewRegistry() *Registry {
-	r := &Registry{handlers: make(map[string]Handler)}
-	r.register("/draftorder", draftOrder)
-	r.register("/draftinfo", draftInfo)
-	r.register("/punishment", punishment)
-	r.register("/champion", champion)
-	r.register("/remotedraft", remoteDraft)
-	return r
+	registry := &Registry{handlers: make(map[string]Handler)}
+	registry.register("/draftorder", draftOrder)
+	registry.register("/draftinfo", draftInfo)
+	registry.register("/punishment", punishment)
+	registry.register("/champion", champion)
+	registry.register("/remotedraft", remoteDraft)
+	return registry
 }
 
 // register normalizes the command name and stores its handler.
-func (r *Registry) register(name string, h Handler) {
-	r.handlers[strings.ToLower(name)] = h
+func (registry *Registry) register(name string, handler Handler) {
+	registry.handlers[strings.ToLower(name)] = handler
 }
 
 // Dispatch routes a command to its handler. Unknown commands return an ephemeral
 // message listing what is available.
-func (r *Registry) Dispatch(cmd slack.SlashCommand, l *league.League) slack.Response {
-	if h, ok := r.handlers[strings.ToLower(cmd.Command)]; ok {
-		return h(cmd, l)
+func (registry *Registry) Dispatch(command slack.SlashCommand, leagueData *league.League) slack.Response {
+	if handler, ok := registry.handlers[strings.ToLower(command.Command)]; ok {
+		return handler(command, leagueData)
 	}
 	return slack.Ephemeral(fmt.Sprintf(
 		"Sorry, %q isn't a command I know. Try one of: %s",
-		cmd.Command, r.commandList(),
+		command.Command, registry.commandList(),
 	))
 }
 
 // commandList returns the supported commands as a sorted, comma-separated string.
-func (r *Registry) commandList() string {
-	names := make([]string, 0, len(r.handlers))
-	for name := range r.handlers {
+func (registry *Registry) commandList() string {
+	names := make([]string, 0, len(registry.handlers))
+	for name := range registry.handlers {
 		names = append(names, name)
 	}
 	sort.Strings(names)

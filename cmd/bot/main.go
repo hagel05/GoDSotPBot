@@ -69,46 +69,52 @@ type server struct {
 	provider league.Provider
 }
 
-func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (srv *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, "ok")
 }
 
-func (s *server) handleSlashCommand(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes))
+func (srv *server) handleSlashCommand(w http.ResponseWriter, r *http.Request) {
+	// Slack signs an HMAC over the raw request body, so we must read the body
+	// before we can verify it — there is no way to authenticate first. Two things
+	// keep this safe: the read is bounded by maxBodyBytes (an oversized body is
+	// truncated, which then fails verification), and the bytes are treated as
+	// opaque until Verify passes. Nothing below parses or trusts the body until
+	// after the signature check.
+	rawBody, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes))
 	if err != nil {
 		slog.Warn("failed to read request body", "error", err)
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
-	// Verify the request really came from Slack before trusting anything in it.
 	timestamp := r.Header.Get("X-Slack-Request-Timestamp")
 	signature := r.Header.Get("X-Slack-Signature")
-	if err := s.verifier.Verify(timestamp, signature, body); err != nil {
+	if err := srv.verifier.Verify(timestamp, signature, rawBody); err != nil {
 		slog.Warn("slack signature verification failed", "error", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	values, err := url.ParseQuery(string(body))
+	// Verified: now it is safe to parse and act on the body.
+	values, err := url.ParseQuery(string(rawBody))
 	if err != nil {
 		slog.Warn("failed to parse slash command body", "error", err)
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	cmd := slack.ParseSlashCommand(values)
+	command := slack.ParseSlashCommand(values)
 
-	l, err := s.provider.Load(r.Context())
+	leagueData, err := srv.provider.Load(r.Context())
 	if err != nil {
 		slog.Error("failed to load league data", "error", err)
 		writeJSON(w, slack.Ephemeral("Sorry, I couldn't read the league data right now."))
 		return
 	}
 
-	resp := s.registry.Dispatch(cmd, l)
-	slog.Info("handled command", "command", cmd.Command, "user", cmd.UserName)
-	writeJSON(w, resp)
+	response := srv.registry.Dispatch(command, leagueData)
+	slog.Info("handled command", "command", command.Command, "user", command.UserName)
+	writeJSON(w, response)
 }
 
 // writeJSON serializes a Slack response as JSON with the right content type.

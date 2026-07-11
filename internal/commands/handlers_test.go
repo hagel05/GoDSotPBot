@@ -23,9 +23,9 @@ func testLeague() *league.League {
 	}
 }
 
-func dispatch(t *testing.T, command string, l *league.League) slack.Response {
+func dispatch(t *testing.T, command string, leagueData *league.League) slack.Response {
 	t.Helper()
-	return NewRegistry().Dispatch(slack.SlashCommand{Command: command}, l)
+	return NewRegistry().Dispatch(slack.SlashCommand{Command: command}, leagueData)
 }
 
 func TestDraftOrder(t *testing.T) {

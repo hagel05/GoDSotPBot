@@ -38,13 +38,13 @@ func NewVerifier(signingSecret string) *Verifier {
 // Verify checks the X-Slack-Signature / X-Slack-Request-Timestamp headers
 // against the raw request body. It returns an error if the timestamp is stale
 // or the signature does not match.
-func (v *Verifier) Verify(timestamp, signature string, body []byte) error {
-	ts, err := strconv.ParseInt(timestamp, 10, 64)
+func (verifier *Verifier) Verify(timestamp, signature string, body []byte) error {
+	unixSeconds, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid timestamp header: %w", err)
 	}
 
-	skew := v.now().Sub(time.Unix(ts, 0))
+	skew := verifier.now().Sub(time.Unix(unixSeconds, 0))
 	if skew < 0 {
 		skew = -skew
 	}
@@ -52,7 +52,7 @@ func (v *Verifier) Verify(timestamp, signature string, body []byte) error {
 		return fmt.Errorf("timestamp outside allowed window (%s)", skew)
 	}
 
-	mac := hmac.New(sha256.New, v.signingSecret)
+	mac := hmac.New(sha256.New, verifier.signingSecret)
 	fmt.Fprintf(mac, "v0:%s:%s", timestamp, body)
 	expected := "v0=" + hex.EncodeToString(mac.Sum(nil))
 

@@ -32,27 +32,27 @@ func TestStaticProvider_Load(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "league.yaml")
 	writeFile(t, path, sampleYAML)
 
-	p, err := NewStaticProvider(path)
+	provider, err := NewStaticProvider(path)
 	if err != nil {
 		t.Fatalf("NewStaticProvider: %v", err)
 	}
 
-	l, err := p.Load(context.Background())
+	loaded, err := provider.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if l.Season != "2025-2026" {
-		t.Errorf("Season = %q, want 2025-2026", l.Season)
+	if loaded.Season != "2025-2026" {
+		t.Errorf("Season = %q, want 2025-2026", loaded.Season)
 	}
-	if got, want := len(l.DraftOrder), 3; got != want {
+	if got, want := len(loaded.DraftOrder), 3; got != want {
 		t.Errorf("len(DraftOrder) = %d, want %d", got, want)
 	}
-	if l.Draft.Location != "Hagel House" {
-		t.Errorf("Location = %q, want Hagel House", l.Draft.Location)
+	if loaded.Draft.Location != "Hagel House" {
+		t.Errorf("Location = %q, want Hagel House", loaded.Draft.Location)
 	}
-	if l.Champion != "Collin" {
-		t.Errorf("Champion = %q, want Collin", l.Champion)
+	if loaded.Champion != "Collin" {
+		t.Errorf("Champion = %q, want Collin", loaded.Champion)
 	}
 }
 
@@ -60,7 +60,7 @@ func TestStaticProvider_ReloadsOnChange(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "league.yaml")
 	writeFile(t, path, sampleYAML)
 
-	p, err := NewStaticProvider(path)
+	provider, err := NewStaticProvider(path)
 	if err != nil {
 		t.Fatalf("NewStaticProvider: %v", err)
 	}
@@ -76,15 +76,15 @@ draft_order: [Hagel]
 		t.Fatalf("chtimes: %v", err)
 	}
 
-	l, err := p.Load(context.Background())
+	loaded, err := provider.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load after change: %v", err)
 	}
-	if l.Champion != "Hagel" {
-		t.Errorf("Champion = %q, want Hagel after reload", l.Champion)
+	if loaded.Champion != "Hagel" {
+		t.Errorf("Champion = %q, want Hagel after reload", loaded.Champion)
 	}
-	if l.Season != "2026-2027" {
-		t.Errorf("Season = %q, want 2026-2027 after reload", l.Season)
+	if loaded.Season != "2026-2027" {
+		t.Errorf("Season = %q, want 2026-2027 after reload", loaded.Season)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestStaticProvider_KeepsLastGoodOnParseError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "league.yaml")
 	writeFile(t, path, sampleYAML)
 
-	p, err := NewStaticProvider(path)
+	provider, err := NewStaticProvider(path)
 	if err != nil {
 		t.Fatalf("NewStaticProvider: %v", err)
 	}
@@ -104,12 +104,12 @@ func TestStaticProvider_KeepsLastGoodOnParseError(t *testing.T) {
 		t.Fatalf("chtimes: %v", err)
 	}
 
-	l, err := p.Load(context.Background())
+	loaded, err := provider.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load should keep last-good copy, got error: %v", err)
 	}
-	if l.Season != "2025-2026" {
-		t.Errorf("Season = %q, want last-good 2025-2026", l.Season)
+	if loaded.Season != "2025-2026" {
+		t.Errorf("Season = %q, want last-good 2025-2026", loaded.Season)
 	}
 }
 

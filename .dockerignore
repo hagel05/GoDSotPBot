@@ -1,0 +1,19 @@
+# Keep the build context small and free of anything not needed to compile.
+.git
+.github
+.gitignore
+*.md
+README.md
+
+# Legacy AWS infrastructure and generated artifacts.
+deploy/
+tf_generated/
+*.tf
+*.tfstate
+*.tfstate.*
+.terraform
+.terraform.lock.hcl
+
+# Local config / secrets must never be baked into the image.
+config/league.yaml
+.env

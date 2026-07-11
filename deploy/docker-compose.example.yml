@@ -1,0 +1,30 @@
+# Reference deployment for TrueNAS SCALE (Custom App -> "Install via YAML"), or
+# any Docker host. Copy, fill in the secret, and adjust paths/ports for your box.
+#
+# Slack must reach this container through YOUR reverse proxy over HTTPS. Point
+# the slash command's Request URL at:  https://<your-host>/slack/commands
+services:
+  dsotp-bot:
+    image: ghcr.io/hagel05/go-dsotp-bot:latest
+    container_name: dsotp-bot
+    restart: unless-stopped
+    environment:
+      # --- Secrets (never commit these) ---
+      SLACK_SIGNING_SECRET: "replace-with-your-slack-signing-secret"
+      # SLACK_BOT_TOKEN: "xoxb-..."   # optional, reserved for future scheduled posts
+
+      # --- Runtime config ---
+      PORT: "8080"
+      LEAGUE_CONFIG_PATH: "/config/league.yaml"
+      LOG_LEVEL: "info"
+    volumes:
+      # Host path holding league.yaml -> mounted read-only into the container.
+      # Edit league.yaml on the host to update draft date/order/etc. (hot-reloads).
+      - /mnt/tank/apps/dsotp-bot/config:/config:ro
+    ports:
+      # Expose to the host / your reverse proxy. Left side is the host port.
+      - "8080:8080"
+    healthcheck:
+      # distroless has no shell/curl; use the Go binary itself as the probe is
+      # not available, so rely on your reverse proxy or Docker's TCP check.
+      disable: true

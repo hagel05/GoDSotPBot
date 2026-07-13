@@ -9,15 +9,19 @@ GHCR) intended for TrueNAS or any Docker host.
 
 ## Commands
 
-| Command        | Response |
-|----------------|----------|
-| `/draftinfo`   | Draft date, time, and location |
-| `/draftorder`  | Numbered draft order |
-| `/punishment`  | League punishments |
-| `/champion`    | Reigning champion |
-| `/remotedraft` | Link to the remote draft room |
+| Command                          | Response |
+|----------------------------------|----------|
+| `/draftinfo`                     | Draft date, time, and location |
+| `/draftorder`                    | Numbered draft order |
+| `/punishment`                    | League punishments |
+| `/remotedraft`                   | Link to the remote draft room |
+| `/champion [year]`               | Reigning champion, or the champion of a given year |
+| `/champions`                     | Full championship history, newest first |
+| `/titles [player]`               | A player's title count + years, or the all-time leaderboard |
+| `/recordchampion <year> <player>`| Record/correct a champion — **admins only** (see `ADMIN_USER_IDS`) |
 
-All response text comes from `league.yaml` (see below).
+Draft/punishment text comes from `league.yaml`; championship history comes from
+the SQLite database (see below).
 
 ## Configuration
 
@@ -29,6 +33,11 @@ Two kinds of configuration, deliberately separated:
 `/config/league.yaml`. The bot **hot-reloads** it when the file changes — no
 rebuild, no restart.
 
+**Championship history — a SQLite database.** History is persisted in a SQLite
+file on a mounted volume (`DB_PATH`, default `/data/dsotp.db`), so it survives
+restarts and redeploys. Record champions with `/recordchampion` (admins) or seed
+them at deploy time with the CLI (see below). Nothing to hand-edit.
+
 **Secrets & runtime settings — environment variables.** Nothing secret lives in
 code or in the image.
 
@@ -36,18 +45,29 @@ code or in the image.
 |------------------------|----------|----------------------|---------|
 | `SLACK_SIGNING_SECRET` | ✅       | —                    | Verifies requests genuinely come from Slack (HMAC) |
 | `LEAGUE_CONFIG_PATH`   |          | `/config/league.yaml`| Path to the mounted league file |
+| `DB_PATH`              |          | `/data/dsotp.db`     | SQLite database path (mounted volume) |
+| `ADMIN_USER_IDS`       |          | —                    | Comma-separated Slack user IDs allowed to run guarded commands |
 | `PORT`                 |          | `8080`               | HTTP listen port |
 | `LOG_LEVEL`            |          | `info`               | `debug` / `info` / `warn` / `error` |
 | `SLACK_BOT_TOKEN`      |          | —                    | Optional; reserved for future scheduled posts |
 
+To seed championship history at deploy time (or correct it), exec into the
+container and run the CLI subcommand:
+
+```sh
+bot record-champion 2024 Hagel
+bot record-champion 2025 Collin
+```
+
 ## Architecture
 
 ```
-cmd/bot            HTTP server (POST /slack/commands, GET /healthz), graceful shutdown
+cmd/bot            HTTP server + CLI subcommands (record-champion), graceful shutdown
 internal/config    env-var configuration
 internal/slack     Slack signing-secret verification + slash-command / response types
 internal/league    league data model + Provider seam (StaticProvider reads the YAML)
-internal/commands  command registry -> handlers (add a command = handler + 1 line)
+internal/store     SQLite persistence (championship history), pure-Go driver
+internal/commands  command registry -> handlers; Env carries league + store per request
 ```
 
 Requests are verified with Slack's signing-secret HMAC and answered **directly**
@@ -91,16 +111,22 @@ league file, the TrueNAS app, and your reverse proxy. Do them in order.
    command's **Request URL** to `https://<your-host>/slack/commands` (the public
    hostname from step 5). Slack requires this URL to be reachable and HTTPS.
 
-   | Command        | Suggested description |
-   |----------------|-----------------------|
-   | `/draftinfo`   | When and where is the draft |
-   | `/draftorder`  | The draft order |
-   | `/punishment`  | League punishments |
-   | `/champion`    | Reigning champion |
-   | `/remotedraft` | Link to the remote draft room |
+   | Command           | Suggested description |
+   |-------------------|-----------------------|
+   | `/draftinfo`      | When and where is the draft |
+   | `/draftorder`     | The draft order |
+   | `/punishment`     | League punishments |
+   | `/remotedraft`    | Link to the remote draft room |
+   | `/champion`       | Reigning champion (or a given year) |
+   | `/champions`      | Full championship history |
+   | `/titles`         | Championships by player |
+   | `/recordchampion` | Record a champion (admins only) |
 
    > Slack validates the Request URL by sending a signed request, so it's easiest
    > to finish steps 4–5 first and come back to save these.
+   >
+   > For `/recordchampion` to work, put the commissioners' Slack user IDs in the
+   > `ADMIN_USER_IDS` env var (step 4).
 
 ### 2. Make the container image pullable
 
@@ -127,10 +153,20 @@ On TrueNAS SCALE → **Apps → Discover Apps → Custom App → Install via YAM
 starting point:
 
 - Set `SLACK_SIGNING_SECRET` to the value from step 1.
+- Set `ADMIN_USER_IDS` to your commissioners' Slack user IDs (comma-separated).
 - Mount the host config directory from step 3 at `/config`.
+- Mount a host data directory (e.g. `/mnt/tank/apps/dsotp-bot/data`) at `/data`,
+  **read-write** — this holds the championship database and must persist.
 - Publish the container port (default `8080`) to your host / reverse proxy.
 
 Confirm it's healthy: `curl http://<truenas-ip>:8080/healthz` should return `ok`.
+
+Seed championship history once (exec into the container):
+
+```sh
+bot record-champion 2024 Hagel
+bot record-champion 2025 Collin
+```
 
 ### 5. Expose it through your reverse proxy
 
@@ -140,10 +176,14 @@ live, go back and save the slash commands from step 1 — Slack will verify the 
 
 ### Updating annual data
 
-Edit `league.yaml` on the host (draft date/time, order, punishments, champion).
-The bot reloads it automatically within a request or two — no restart, no rebuild.
-If a save leaves the file temporarily invalid, the bot keeps serving the last good
+Edit `league.yaml` on the host (draft date/time, order, punishments). The bot
+reloads it automatically within a request or two — no restart, no rebuild. If a
+save leaves the file temporarily invalid, the bot keeps serving the last good
 version and logs the parse error.
+
+Championship history is updated separately (it's in the database, not the YAML):
+run `/recordchampion <year> <player>` in Slack as an admin, or
+`bot record-champion <year> <player>` in the container.
 
 ### Rotating the signing secret
 

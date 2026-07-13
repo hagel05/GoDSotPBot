@@ -13,7 +13,6 @@ type League struct {
 	Draft       Draft    `yaml:"draft"`
 	DraftOrder  []string `yaml:"draft_order"`
 	Punishments []string `yaml:"punishments"`
-	Champion    string   `yaml:"champion"`
 }
 
 // Draft describes when and where the draft happens.

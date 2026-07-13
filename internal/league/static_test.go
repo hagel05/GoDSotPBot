@@ -18,7 +18,6 @@ draft:
 draft_order: [Jared, Hagel, Dan]
 punishments:
   - "First place names last place team"
-champion: "Collin"
 `
 
 func writeFile(t *testing.T, path, content string) {
@@ -51,9 +50,6 @@ func TestStaticProvider_Load(t *testing.T) {
 	if loaded.Draft.Location != "Hagel House" {
 		t.Errorf("Location = %q, want Hagel House", loaded.Draft.Location)
 	}
-	if loaded.Champion != "Collin" {
-		t.Errorf("Champion = %q, want Collin", loaded.Champion)
-	}
 }
 
 func TestStaticProvider_ReloadsOnChange(t *testing.T) {
@@ -65,9 +61,8 @@ func TestStaticProvider_ReloadsOnChange(t *testing.T) {
 		t.Fatalf("NewStaticProvider: %v", err)
 	}
 
-	// Rewrite with a new champion and a bumped mtime so the reload triggers.
+	// Rewrite with new data and a bumped mtime so the reload triggers.
 	writeFile(t, path, `season: "2026-2027"
-champion: "Hagel"
 draft_order: [Hagel]
 `)
 	// Ensure the modification time is strictly newer even on coarse-grained FS.
@@ -80,11 +75,11 @@ draft_order: [Hagel]
 	if err != nil {
 		t.Fatalf("Load after change: %v", err)
 	}
-	if loaded.Champion != "Hagel" {
-		t.Errorf("Champion = %q, want Hagel after reload", loaded.Champion)
-	}
 	if loaded.Season != "2026-2027" {
 		t.Errorf("Season = %q, want 2026-2027 after reload", loaded.Season)
+	}
+	if len(loaded.DraftOrder) != 1 || loaded.DraftOrder[0] != "Hagel" {
+		t.Errorf("DraftOrder = %v, want [Hagel] after reload", loaded.DraftOrder)
 	}
 }
 

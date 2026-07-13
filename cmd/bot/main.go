@@ -1,18 +1,25 @@
 // Command bot runs the DSotP fantasy-football Slack bot as a long-lived HTTP
 // server. It replaces the original AWS Lambda entrypoint so the same code can
 // run in a Docker container on TrueNAS.
+//
+// Subcommands:
+//
+//	bot                              run the HTTP server (default)
+//	bot record-champion <year> <player>   seed/correct a champion in the DB
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,6 +28,7 @@ import (
 	"github.com/hagel05/go-dsotp-bot/internal/config"
 	"github.com/hagel05/go-dsotp-bot/internal/league"
 	"github.com/hagel05/go-dsotp-bot/internal/slack"
+	"github.com/hagel05/go-dsotp-bot/internal/store"
 )
 
 // maxBodyBytes caps how much of a request body we read. Slash-command payloads
@@ -28,6 +36,20 @@ import (
 const maxBodyBytes = 64 * 1024
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "record-champion":
+			runRecordChampion(os.Args[2:])
+			return
+		default:
+			fmt.Fprintf(os.Stderr, "unknown subcommand %q\n", os.Args[1])
+			os.Exit(2)
+		}
+	}
+	runServer()
+}
+
+func runServer() {
 	cfg, err := config.Load()
 	if err != nil {
 		// Logger isn't configured yet; use the default before exiting.
@@ -43,10 +65,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	db, err := store.Open(context.Background(), cfg.DBPath)
+	if err != nil {
+		slog.Error("failed to open database", "path", cfg.DBPath, "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
 	server := &server{
-		verifier: slack.NewVerifier(cfg.SlackSigningSecret),
-		registry: commands.NewRegistry(),
-		provider: provider,
+		verifier:  slack.NewVerifier(cfg.SlackSigningSecret),
+		registry:  commands.NewRegistry(),
+		provider:  provider,
+		champions: db,
+		admins:    cfg.AdminUserIDs,
 	}
 
 	mux := http.NewServeMux()
@@ -62,11 +93,47 @@ func main() {
 	runWithGracefulShutdown(httpServer)
 }
 
+// runRecordChampion seeds or corrects a champion from the command line, e.g.
+// `bot record-champion 2024 Hagel`. Used to bootstrap history at deploy time.
+func runRecordChampion(args []string) {
+	if len(args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: bot record-champion <year> <player>")
+		os.Exit(2)
+	}
+	year, err := strconv.Atoi(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid year %q\n", args[0])
+		os.Exit(2)
+	}
+	player := strings.Join(args[1:], " ")
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = config.DefaultDBPath
+	}
+
+	ctx := context.Background()
+	db, err := store.Open(ctx, dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open database %q: %v\n", dbPath, err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if err := db.Record(ctx, year, player); err != nil {
+		fmt.Fprintf(os.Stderr, "record champion: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Recorded %s as the %d champion (%s).\n", player, year, dbPath)
+}
+
 // server holds the dependencies each request handler needs.
 type server struct {
-	verifier *slack.Verifier
-	registry *commands.Registry
-	provider league.Provider
+	verifier  *slack.Verifier
+	registry  *commands.Registry
+	provider  league.Provider
+	champions store.ChampionStore
+	admins    map[string]bool
 }
 
 func (srv *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -112,7 +179,12 @@ func (srv *server) handleSlashCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := srv.registry.Dispatch(command, leagueData)
+	env := &commands.Env{
+		League:    leagueData,
+		Champions: srv.champions,
+		Admins:    srv.admins,
+	}
+	response := srv.registry.Dispatch(r.Context(), command, env)
 	slog.Info("handled command", "command", command.Command, "user", command.UserName)
 	writeJSON(w, response)
 }

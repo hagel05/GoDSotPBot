@@ -7,6 +7,7 @@ import "net/url"
 type SlashCommand struct {
 	Command     string
 	Text        string
+	UserID      string
 	UserName    string
 	ChannelID   string
 	ChannelName string
@@ -19,6 +20,7 @@ func ParseSlashCommand(values url.Values) SlashCommand {
 	return SlashCommand{
 		Command:     values.Get("command"),
 		Text:        values.Get("text"),
+		UserID:      values.Get("user_id"),
 		UserName:    values.Get("user_name"),
 		ChannelID:   values.Get("channel_id"),
 		ChannelName: values.Get("channel_name"),

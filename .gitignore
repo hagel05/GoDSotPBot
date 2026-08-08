@@ -16,3 +16,8 @@ node_modules/
 
 # Real league data / secrets — never commit. Use config/league.example.yaml as a template.
 /config/league.yaml
+
+# SQLite databases (runtime data / local dev)
+*.db
+*.db-shm
+*.db-wal

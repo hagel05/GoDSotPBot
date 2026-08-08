@@ -1,9 +1,13 @@
 # DSotP league configuration.
 #
-# This is the ONLY file you edit for the annual updates: draft date/time,
-# location, draft order, punishments, and the reigning champion. Copy it to your
-# real league.yaml (mounted into the container at /config/league.yaml) and edit.
-# The bot reloads automatically when this file changes — no rebuild, no restart.
+# Edit this file for the annual updates: draft date/time, location, draft order,
+# and punishments. Copy it to your real league.yaml (mounted into the container
+# at /config/league.yaml) and edit. The bot reloads automatically when this file
+# changes — no rebuild, no restart.
+#
+# Championship history is NOT here — it lives in the SQLite database (persistent
+# volume). Record a champion with the `/recordchampion <year> <player>` command
+# (admins only) or, at deploy time, `bot record-champion <year> <player>`.
 
 season: "2025-2026"
 
@@ -29,5 +33,3 @@ punishments:
   - "First Place names the Last Place Team"
   - "License Plate holder must be displayed from draft to end of regular season"
   - "Last place purchases the first round of drinks at the draft"
-
-champion: "Collin"

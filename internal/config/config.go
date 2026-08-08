@@ -12,6 +12,10 @@ import (
 	"strings"
 )
 
+// DefaultDBPath is the SQLite path used when DB_PATH is unset. Exported so CLI
+// subcommands can reuse it without re-deriving the default.
+const DefaultDBPath = "/data/dsotp.db"
+
 // Config holds all runtime configuration for the bot.
 type Config struct {
 	// Port is the TCP port the HTTP server listens on.
@@ -22,6 +26,13 @@ type Config struct {
 
 	// LogLevel controls log verbosity (debug, info, warn, error).
 	LogLevel string
+
+	// DBPath is the path to the SQLite database file (mounted volume).
+	DBPath string
+
+	// AdminUserIDs is the set of Slack user IDs allowed to run guarded commands
+	// (e.g. recording a champion).
+	AdminUserIDs map[string]bool
 
 	// SlackSigningSecret is used to verify that requests genuinely originate
 	// from Slack (HMAC of the raw request body). Required.
@@ -40,6 +51,8 @@ func Load() (*Config, error) {
 		Port:               getEnv("PORT", "8080"),
 		LeagueConfigPath:   getEnv("LEAGUE_CONFIG_PATH", "/config/league.yaml"),
 		LogLevel:           getEnv("LOG_LEVEL", "info"),
+		DBPath:             getEnv("DB_PATH", DefaultDBPath),
+		AdminUserIDs:       parseSet(os.Getenv("ADMIN_USER_IDS")),
 		SlackSigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
 		SlackBotToken:      os.Getenv("SLACK_BOT_TOKEN"),
 	}
@@ -61,4 +74,15 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// parseSet turns a comma-separated string into a set, ignoring blanks/whitespace.
+func parseSet(csv string) map[string]bool {
+	set := make(map[string]bool)
+	for _, item := range strings.Split(csv, ",") {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			set[trimmed] = true
+		}
+	}
+	return set
 }

@@ -1,24 +1,24 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"github.com/hagel05/go-dsotp-bot/internal/league"
 	"github.com/hagel05/go-dsotp-bot/internal/slack"
 )
 
 // draftOrder lists the draft order as a numbered list.
-func draftOrder(_ slack.SlashCommand, leagueData *league.League) slack.Response {
-	if len(leagueData.DraftOrder) == 0 {
+func draftOrder(_ context.Context, _ slack.SlashCommand, env *Env) slack.Response {
+	if len(env.League.DraftOrder) == 0 {
 		return slack.Ephemeral("The draft order hasn't been set yet.")
 	}
-	return slack.InChannel(numberedList(leagueData.DraftOrder))
+	return slack.InChannel(numberedList(env.League.DraftOrder))
 }
 
 // draftInfo reports when and where the draft is.
-func draftInfo(_ slack.SlashCommand, leagueData *league.League) slack.Response {
-	draft := leagueData.Draft
+func draftInfo(_ context.Context, _ slack.SlashCommand, env *Env) slack.Response {
+	draft := env.League.Draft
 	if draft.Date == "" && draft.Time == "" && draft.Location == "" {
 		return slack.Ephemeral("Draft details haven't been set yet.")
 	}
@@ -37,28 +37,20 @@ func draftInfo(_ slack.SlashCommand, leagueData *league.League) slack.Response {
 }
 
 // punishment lists the league punishments.
-func punishment(_ slack.SlashCommand, leagueData *league.League) slack.Response {
-	if len(leagueData.Punishments) == 0 {
+func punishment(_ context.Context, _ slack.SlashCommand, env *Env) slack.Response {
+	if len(env.League.Punishments) == 0 {
 		return slack.Ephemeral("No punishments have been set.")
 	}
-	return slack.InChannel(numberedList(leagueData.Punishments))
-}
-
-// champion names the reigning champion.
-func champion(_ slack.SlashCommand, leagueData *league.League) slack.Response {
-	if leagueData.Champion == "" {
-		return slack.Ephemeral("No champion has been recorded yet.")
-	}
-	return slack.InChannel(fmt.Sprintf("%s is your champion", leagueData.Champion))
+	return slack.InChannel(numberedList(env.League.Punishments))
 }
 
 // remoteDraft shares the remote-draft link.
-func remoteDraft(_ slack.SlashCommand, leagueData *league.League) slack.Response {
-	if leagueData.Draft.RemoteURL == "" {
+func remoteDraft(_ context.Context, _ slack.SlashCommand, env *Env) slack.Response {
+	if env.League.Draft.RemoteURL == "" {
 		return slack.Ephemeral("No remote draft link has been set.")
 	}
 	return slack.InChannel(fmt.Sprintf(
-		"If unable to attend in person please go here: %s", leagueData.Draft.RemoteURL,
+		"If unable to attend in person please go here: %s", env.League.Draft.RemoteURL,
 	))
 }
 

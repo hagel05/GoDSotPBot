@@ -1,0 +1,10 @@
+# Normalize line endings so the repo stays LF regardless of contributor OS.
+* text=auto eol=lf
+
+# Go tooling (gofmt) expects LF; keep these explicit.
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sql text eol=lf

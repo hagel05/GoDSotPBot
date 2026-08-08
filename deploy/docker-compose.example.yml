@@ -16,11 +16,17 @@ services:
       # --- Runtime config ---
       PORT: "8080"
       LEAGUE_CONFIG_PATH: "/config/league.yaml"
+      DB_PATH: "/data/dsotp.db"
       LOG_LEVEL: "info"
+      # Slack user IDs allowed to run guarded commands (e.g. /recordchampion).
+      # Comma-separated, e.g. "U01ABC123,U04XYZ789".
+      ADMIN_USER_IDS: ""
     volumes:
       # Host path holding league.yaml -> mounted read-only into the container.
       # Edit league.yaml on the host to update draft date/order/etc. (hot-reloads).
       - /mnt/tank/apps/dsotp-bot/config:/config:ro
+      # Persistent data (SQLite championship history) -> read-write, survives redeploys.
+      - /mnt/tank/apps/dsotp-bot/data:/data
     ports:
       # Expose to the host / your reverse proxy. Left side is the host port.
       - "8080:8080"

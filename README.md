@@ -190,6 +190,34 @@ run `/recordchampion <year> <player>` in Slack as an admin, or
 If you regenerate the Slack signing secret, update `SLACK_SIGNING_SECRET` in the
 TrueNAS app config and restart the app.
 
+## Yahoo integration
+
+Pulling finish order and live scores needs a one-time authorization with your
+Yahoo account (the data is private to a league member). After that the bot is
+autonomous.
+
+**Env vars** (Client ID/Secret from your [Yahoo developer app](https://developer.yahoo.com/apps/),
+Fantasy Sports **Read** scope):
+
+| Variable              | Purpose |
+|-----------------------|---------|
+| `YAHOO_CLIENT_ID`     | App client id (consumer key) |
+| `YAHOO_CLIENT_SECRET` | App client secret — **secret** |
+| `YAHOO_REDIRECT_URI`  | Must exactly match the Redirect URI registered on the app |
+
+**One-time authorization:**
+
+```sh
+# 1. Print the URL to approve (needs the three env vars above set):
+bot yahoo-auth
+# 2. Open it, approve, copy the `code` from the redirected URL, then:
+bot yahoo-auth <code>
+```
+
+The resulting **refresh token is saved to the database** (not an env var), so it
+survives reboots/reinstalls and self-updates if Yahoo ever rotates it. If it's
+ever revoked, just re-run `bot yahoo-auth`.
+
 ## CI/CD
 
 - `.github/workflows/ci.yml` — `go vet`, `go test -race`, `go build` on every push/PR.

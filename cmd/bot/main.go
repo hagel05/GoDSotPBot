@@ -94,10 +94,12 @@ func runServer() {
 }
 
 // runRecordChampion seeds or corrects a champion from the command line, e.g.
-// `bot record-champion 2024 Hagel`. Used to bootstrap history at deploy time.
+// `bot record-champion 2024 Hagel "Vamonos Pest"`. The player is a single token;
+// anything after it is the (optional) team name. Used to bootstrap history at
+// deploy time.
 func runRecordChampion(args []string) {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: bot record-champion <year> <player>")
+		fmt.Fprintln(os.Stderr, `usage: bot record-champion <year> <player> [team name]`)
 		os.Exit(2)
 	}
 	year, err := strconv.Atoi(args[0])
@@ -105,7 +107,8 @@ func runRecordChampion(args []string) {
 		fmt.Fprintf(os.Stderr, "invalid year %q\n", args[0])
 		os.Exit(2)
 	}
-	player := strings.Join(args[1:], " ")
+	player := args[1]
+	teamName := strings.Join(args[2:], " ")
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
@@ -120,11 +123,11 @@ func runRecordChampion(args []string) {
 	}
 	defer db.Close()
 
-	if err := db.Record(ctx, year, player); err != nil {
+	if err := db.Record(ctx, store.Champion{Year: year, TeamName: teamName, Player: player}); err != nil {
 		fmt.Fprintf(os.Stderr, "record champion: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Recorded %s as the %d champion (%s).\n", player, year, dbPath)
+	fmt.Printf("Recorded %d champion: %s (team %q) in %s.\n", year, player, teamName, dbPath)
 }
 
 // server holds the dependencies each request handler needs.

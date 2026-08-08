@@ -2,6 +2,7 @@
 -- Applied idempotently at startup; safe to run on every boot.
 
 CREATE TABLE IF NOT EXISTS champions (
-    year   INTEGER PRIMARY KEY,
-    player TEXT NOT NULL
+    year      INTEGER PRIMARY KEY,
+    team_name TEXT NOT NULL DEFAULT '',
+    player    TEXT NOT NULL
 );

@@ -7,7 +7,17 @@ import (
 	"strings"
 
 	"github.com/hagel05/go-dsotp-bot/internal/slack"
+	"github.com/hagel05/go-dsotp-bot/internal/store"
 )
+
+// championPhrase renders "<Team> managed by <Player>", degrading to just the
+// player when the team name is unknown (e.g. a hand-entered fallback year).
+func championPhrase(teamName, player string) string {
+	if teamName != "" {
+		return fmt.Sprintf("%s managed by %s", teamName, player)
+	}
+	return player
+}
 
 // champion answers "/champion [year]": no argument reports the reigning
 // champion; a year reports that season's champion.
@@ -22,7 +32,8 @@ func champion(ctx context.Context, command slack.SlashCommand, env *Env) slack.R
 		if !ok {
 			return slack.Ephemeral("No champions have been recorded yet.")
 		}
-		return slack.InChannel(fmt.Sprintf("%s is your reigning champion (%d).", latest.Player, latest.Year))
+		return slack.InChannel(fmt.Sprintf("%s is your champion.",
+			championPhrase(latest.TeamName, latest.Player)))
 	}
 
 	year, err := strconv.Atoi(arg)
@@ -36,7 +47,8 @@ func champion(ctx context.Context, command slack.SlashCommand, env *Env) slack.R
 	if !ok {
 		return slack.Ephemeral(fmt.Sprintf("No champion recorded for %d.", year))
 	}
-	return slack.InChannel(fmt.Sprintf("%d champion: %s.", champ.Year, champ.Player))
+	return slack.InChannel(fmt.Sprintf("The %d champion was %s.",
+		champ.Year, championPhrase(champ.TeamName, champ.Player)))
 }
 
 // champions lists the full championship history, newest first.
@@ -52,7 +64,11 @@ func champions(ctx context.Context, _ slack.SlashCommand, env *Env) slack.Respon
 	var builder strings.Builder
 	builder.WriteString("Championship history:\n")
 	for _, champ := range all {
-		fmt.Fprintf(&builder, "%d — %s\n", champ.Year, champ.Player)
+		if champ.TeamName != "" {
+			fmt.Fprintf(&builder, "%d — %s (%s)\n", champ.Year, champ.Player, champ.TeamName)
+		} else {
+			fmt.Fprintf(&builder, "%d — %s\n", champ.Year, champ.Player)
+		}
 	}
 	return slack.InChannel(strings.TrimRight(builder.String(), "\n"))
 }
@@ -91,7 +107,8 @@ func titles(ctx context.Context, command slack.SlashCommand, env *Env) slack.Res
 }
 
 // recordChampion records (or corrects) a season's champion. Guarded: only admins
-// listed in ADMIN_USER_IDS may run it.
+// listed in ADMIN_USER_IDS may run it. The player is a single token; anything
+// after it is the (optional) team name.
 func recordChampion(ctx context.Context, command slack.SlashCommand, env *Env) slack.Response {
 	if !env.IsAdmin(command.UserID) {
 		return slack.Ephemeral("Sorry, only league admins can record champions.")
@@ -99,18 +116,20 @@ func recordChampion(ctx context.Context, command slack.SlashCommand, env *Env) s
 
 	fields := strings.Fields(command.Text)
 	if len(fields) < 2 {
-		return slack.Ephemeral("Usage: `/recordchampion <year> <player>` — e.g. `/recordchampion 2024 Hagel`.")
+		return slack.Ephemeral("Usage: `/recordchampion <year> <player> [team name]` — e.g. `/recordchampion 2024 Hagel Vamonos Pest`.")
 	}
 	year, err := strconv.Atoi(fields[0])
 	if err != nil {
-		return slack.Ephemeral("The first argument must be a year, e.g. `/recordchampion 2024 Hagel`.")
+		return slack.Ephemeral("The first argument must be a year, e.g. `/recordchampion 2024 Hagel Vamonos Pest`.")
 	}
-	player := strings.Join(fields[1:], " ")
+	player := fields[1]
+	teamName := strings.Join(fields[2:], " ")
 
-	if err := env.Champions.Record(ctx, year, player); err != nil {
+	if err := env.Champions.Record(ctx, store.Champion{Year: year, TeamName: teamName, Player: player}); err != nil {
 		return storeError(err)
 	}
-	return slack.InChannel(fmt.Sprintf("Recorded %s as the %d champion.", player, year))
+	return slack.InChannel(fmt.Sprintf("Recorded %s as the %d champion.",
+		championPhrase(teamName, player), year))
 }
 
 // joinYears formats a list of years as "2020, 2022, 2023".

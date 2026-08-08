@@ -22,7 +22,7 @@ func TestRecordAndByYear(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 
-	if err := db.Record(ctx, 2025, "Collin"); err != nil {
+	if err := db.Record(ctx, Champion{Year: 2025, TeamName: "Vamonos Pest", Player: "Collin"}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 
@@ -33,9 +33,29 @@ func TestRecordAndByYear(t *testing.T) {
 	if champ.Player != "Collin" {
 		t.Errorf("player = %q, want Collin", champ.Player)
 	}
+	if champ.TeamName != "Vamonos Pest" {
+		t.Errorf("team = %q, want Vamonos Pest", champ.TeamName)
+	}
 
 	if _, ok, _ := db.ByYear(ctx, 1999); ok {
 		t.Error("ByYear(1999) should not be found")
+	}
+}
+
+func TestRecordWithoutTeamName(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	// Team name is optional (hand-entered fallback years).
+	if err := db.Record(ctx, Champion{Year: 2019, Player: "Dan"}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	champ, _, _ := db.ByYear(ctx, 2019)
+	if champ.TeamName != "" {
+		t.Errorf("team = %q, want empty", champ.TeamName)
+	}
+	if champ.Player != "Dan" {
+		t.Errorf("player = %q, want Dan", champ.Player)
 	}
 }
 
@@ -43,20 +63,20 @@ func TestRecordOverwrites(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 
-	_ = db.Record(ctx, 2025, "Collin")
-	if err := db.Record(ctx, 2025, "Hagel"); err != nil {
+	_ = db.Record(ctx, Champion{Year: 2025, TeamName: "Old Team", Player: "Collin"})
+	if err := db.Record(ctx, Champion{Year: 2025, TeamName: "New Team", Player: "Hagel"}); err != nil {
 		t.Fatalf("re-Record: %v", err)
 	}
 
 	champ, _, _ := db.ByYear(ctx, 2025)
-	if champ.Player != "Hagel" {
-		t.Errorf("player = %q, want Hagel after overwrite", champ.Player)
+	if champ.Player != "Hagel" || champ.TeamName != "New Team" {
+		t.Errorf("after overwrite = %+v, want {Hagel, New Team}", champ)
 	}
 }
 
 func TestRecordEmptyPlayerRejected(t *testing.T) {
 	db := newTestDB(t)
-	if err := db.Record(context.Background(), 2025, ""); err == nil {
+	if err := db.Record(context.Background(), Champion{Year: 2025, Player: ""}); err == nil {
 		t.Error("expected error recording empty player")
 	}
 }
@@ -69,9 +89,9 @@ func TestAllAndLatest(t *testing.T) {
 		t.Error("Latest on empty DB should not be found")
 	}
 
-	_ = db.Record(ctx, 2023, "Dan")
-	_ = db.Record(ctx, 2025, "Collin")
-	_ = db.Record(ctx, 2024, "Hagel")
+	_ = db.Record(ctx, Champion{Year: 2023, Player: "Dan"})
+	_ = db.Record(ctx, Champion{Year: 2025, TeamName: "Vamonos Pest", Player: "Collin"})
+	_ = db.Record(ctx, Champion{Year: 2024, Player: "Hagel"})
 
 	all, err := db.All(ctx)
 	if err != nil {
@@ -87,8 +107,8 @@ func TestAllAndLatest(t *testing.T) {
 	}
 
 	latest, ok, _ := db.Latest(ctx)
-	if !ok || latest.Year != 2025 || latest.Player != "Collin" {
-		t.Errorf("Latest = %+v, want {2025 Collin}", latest)
+	if !ok || latest.Year != 2025 || latest.Player != "Collin" || latest.TeamName != "Vamonos Pest" {
+		t.Errorf("Latest = %+v, want {2025 Vamonos Pest Collin}", latest)
 	}
 }
 
@@ -96,11 +116,11 @@ func TestCountsByPlayer(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 
-	_ = db.Record(ctx, 2020, "Hagel")
-	_ = db.Record(ctx, 2021, "Collin")
-	_ = db.Record(ctx, 2022, "Hagel")
-	_ = db.Record(ctx, 2023, "Hagel")
-	_ = db.Record(ctx, 2024, "Collin")
+	_ = db.Record(ctx, Champion{Year: 2020, Player: "Hagel"})
+	_ = db.Record(ctx, Champion{Year: 2021, Player: "Collin"})
+	_ = db.Record(ctx, Champion{Year: 2022, Player: "Hagel"})
+	_ = db.Record(ctx, Champion{Year: 2023, Player: "Hagel"})
+	_ = db.Record(ctx, Champion{Year: 2024, Player: "Collin"})
 
 	counts, err := db.CountsByPlayer(ctx)
 	if err != nil {
@@ -125,8 +145,8 @@ func TestTitlesFor(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 
-	_ = db.Record(ctx, 2020, "Hagel")
-	_ = db.Record(ctx, 2023, "Hagel")
+	_ = db.Record(ctx, Champion{Year: 2020, Player: "Hagel"})
+	_ = db.Record(ctx, Champion{Year: 2023, Player: "Hagel"})
 
 	// Case-insensitive lookup, preserving stored capitalization.
 	titles, err := db.TitlesFor(ctx, "hagel")

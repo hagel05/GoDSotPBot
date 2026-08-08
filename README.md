@@ -15,10 +15,10 @@ GHCR) intended for TrueNAS or any Docker host.
 | `/draftorder`                    | Numbered draft order |
 | `/punishment`                    | League punishments |
 | `/remotedraft`                   | Link to the remote draft room |
-| `/champion [year]`               | Reigning champion, or the champion of a given year |
+| `/champion [year]`               | Reigning champion (team + player), or a given year's |
 | `/champions`                     | Full championship history, newest first |
 | `/titles [player]`               | A player's title count + years, or the all-time leaderboard |
-| `/recordchampion <year> <player>`| Record/correct a champion — **admins only** (see `ADMIN_USER_IDS`) |
+| `/recordchampion <year> <player> [team]` | Record/correct a champion — **admins only** (see `ADMIN_USER_IDS`) |
 
 Draft/punishment text comes from `league.yaml`; championship history comes from
 the SQLite database (see below).
@@ -55,8 +55,8 @@ To seed championship history at deploy time (or correct it), exec into the
 container and run the CLI subcommand:
 
 ```sh
-bot record-champion 2024 Hagel
-bot record-champion 2025 Collin
+bot record-champion 2024 Hagel "Fighting Mongooses"
+bot record-champion 2025 Collin "Vamonos Pest"
 ```
 
 ## Architecture
@@ -164,8 +164,8 @@ Confirm it's healthy: `curl http://<truenas-ip>:8080/healthz` should return `ok`
 Seed championship history once (exec into the container):
 
 ```sh
-bot record-champion 2024 Hagel
-bot record-champion 2025 Collin
+bot record-champion 2024 Hagel "Fighting Mongooses"
+bot record-champion 2025 Collin "Vamonos Pest"
 ```
 
 ### 5. Expose it through your reverse proxy

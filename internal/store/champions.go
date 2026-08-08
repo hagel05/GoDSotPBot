@@ -8,10 +8,12 @@ import (
 	"sort"
 )
 
-// Champion is a single season's champion.
+// Champion is a single season's champion. TeamName is the Yahoo team name that
+// season and may be empty for hand-entered years.
 type Champion struct {
-	Year   int
-	Player string
+	Year     int
+	TeamName string
+	Player   string
 }
 
 // PlayerTitles is a player's championship record.
@@ -25,7 +27,7 @@ func (t PlayerTitles) Count() int { return len(t.Years) }
 
 // ChampionStore is the persistence seam the command handlers depend on.
 type ChampionStore interface {
-	Record(ctx context.Context, year int, player string) error
+	Record(ctx context.Context, champion Champion) error
 	ByYear(ctx context.Context, year int) (Champion, bool, error)
 	All(ctx context.Context) ([]Champion, error)
 	Latest(ctx context.Context) (Champion, bool, error)
@@ -38,14 +40,14 @@ var _ ChampionStore = (*DB)(nil)
 
 // Record inserts or updates the champion for a year (re-recording corrects a
 // prior entry).
-func (db *DB) Record(ctx context.Context, year int, player string) error {
-	if player == "" {
+func (db *DB) Record(ctx context.Context, champion Champion) error {
+	if champion.Player == "" {
 		return errors.New("player must not be empty")
 	}
 	_, err := db.sql.ExecContext(ctx,
-		`INSERT INTO champions (year, player) VALUES (?, ?)
-		 ON CONFLICT(year) DO UPDATE SET player = excluded.player`,
-		year, player)
+		`INSERT INTO champions (year, team_name, player) VALUES (?, ?, ?)
+		 ON CONFLICT(year) DO UPDATE SET team_name = excluded.team_name, player = excluded.player`,
+		champion.Year, champion.TeamName, champion.Player)
 	if err != nil {
 		return fmt.Errorf("record champion: %w", err)
 	}
@@ -54,22 +56,23 @@ func (db *DB) Record(ctx context.Context, year int, player string) error {
 
 // ByYear returns the champion for a year; the bool is false if none is recorded.
 func (db *DB) ByYear(ctx context.Context, year int) (Champion, bool, error) {
-	var player string
+	champion := Champion{Year: year}
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT player FROM champions WHERE year = ?`, year).Scan(&player)
+		`SELECT team_name, player FROM champions WHERE year = ?`, year).
+		Scan(&champion.TeamName, &champion.Player)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Champion{}, false, nil
 	}
 	if err != nil {
 		return Champion{}, false, fmt.Errorf("champion by year: %w", err)
 	}
-	return Champion{Year: year, Player: player}, true, nil
+	return champion, true, nil
 }
 
 // All returns every recorded champion, newest year first.
 func (db *DB) All(ctx context.Context) ([]Champion, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT year, player FROM champions ORDER BY year DESC`)
+		`SELECT year, team_name, player FROM champions ORDER BY year DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("all champions: %w", err)
 	}
@@ -78,7 +81,7 @@ func (db *DB) All(ctx context.Context) ([]Champion, error) {
 	var champions []Champion
 	for rows.Next() {
 		var c Champion
-		if err := rows.Scan(&c.Year, &c.Player); err != nil {
+		if err := rows.Scan(&c.Year, &c.TeamName, &c.Player); err != nil {
 			return nil, fmt.Errorf("scan champion: %w", err)
 		}
 		champions = append(champions, c)
@@ -90,7 +93,8 @@ func (db *DB) All(ctx context.Context) ([]Champion, error) {
 func (db *DB) Latest(ctx context.Context) (Champion, bool, error) {
 	var c Champion
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT year, player FROM champions ORDER BY year DESC LIMIT 1`).Scan(&c.Year, &c.Player)
+		`SELECT year, team_name, player FROM champions ORDER BY year DESC LIMIT 1`).
+		Scan(&c.Year, &c.TeamName, &c.Player)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Champion{}, false, nil
 	}

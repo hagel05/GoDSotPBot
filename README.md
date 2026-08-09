@@ -233,6 +233,12 @@ docker exec dsotp-bot /bot yahoo-auth <code>     # exchanges the code, saves tok
 
 Either way, if the token is ever revoked just re-authorize — no redeploy needed.
 
+Once authorized, dump a raw API response for debugging with:
+
+```sh
+docker exec dsotp-bot /bot yahoo-get league/<your-league-key>/standings
+```
+
 ## CI/CD
 
 - `.github/workflows/ci.yml` — `go vet`, `go test -race`, `go build` on every push/PR.

@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -29,6 +30,7 @@ import (
 	"github.com/hagel05/go-dsotp-bot/internal/league"
 	"github.com/hagel05/go-dsotp-bot/internal/slack"
 	"github.com/hagel05/go-dsotp-bot/internal/store"
+	"github.com/hagel05/go-dsotp-bot/internal/yahoo"
 )
 
 // maxBodyBytes caps how much of a request body we read. Slash-command payloads
@@ -40,6 +42,12 @@ func main() {
 		switch os.Args[1] {
 		case "record-champion":
 			runRecordChampion(os.Args[2:])
+			return
+		case "yahoo-auth":
+			runYahooAuth(os.Args[2:])
+			return
+		case "yahoo-get":
+			runYahooGet(os.Args[2:])
 			return
 		default:
 			fmt.Fprintf(os.Stderr, "unknown subcommand %q\n", os.Args[1])
@@ -83,6 +91,18 @@ func runServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", server.handleHealth)
 	mux.HandleFunc("POST /slack/commands", server.handleSlashCommand)
+
+	if cfg.YahooEnabled() {
+		oauthCfg := yahoo.OAuthConfig(cfg.YahooClientID, cfg.YahooClientSecret, cfg.YahooRedirectURI)
+		authSrv := yahoo.NewAuthServer(oauthCfg, db, cfg.YahooAuthUser, cfg.YahooAuthPass)
+		mux.HandleFunc("GET /yahoo/login", authSrv.LoginHandler)
+		mux.HandleFunc("GET /yahoo/callback", authSrv.CallbackHandler)
+		if authSrv.BasicAuthConfigured() {
+			slog.Info("Yahoo browser auth enabled at /yahoo/login (Basic Auth protected)")
+		} else {
+			slog.Warn("Yahoo auth endpoints served WITHOUT app Basic Auth; set YAHOO_AUTH_USER/YAHOO_AUTH_PASS or gate /yahoo/ at your reverse proxy")
+		}
+	}
 
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -128,6 +148,108 @@ func runRecordChampion(args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("Recorded %d champion: %s (team %q) in %s.\n", year, player, teamName, dbPath)
+}
+
+// runYahooAuth performs the one-time Yahoo authorization. With no argument it
+// prints the URL to approve; run again as `bot yahoo-auth <code>` with the code
+// Yahoo redirects back to exchange it for a long-lived refresh token.
+func runYahooAuth(args []string) {
+	clientID := os.Getenv("YAHOO_CLIENT_ID")
+	clientSecret := os.Getenv("YAHOO_CLIENT_SECRET")
+	redirectURI := os.Getenv("YAHOO_REDIRECT_URI")
+	if clientID == "" || clientSecret == "" || redirectURI == "" {
+		fmt.Fprintln(os.Stderr, "set YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, and YAHOO_REDIRECT_URI first")
+		os.Exit(2)
+	}
+	cfg := yahoo.OAuthConfig(clientID, clientSecret, redirectURI)
+
+	if len(args) == 0 {
+		fmt.Println("1. Open this URL in a browser and approve access:")
+		fmt.Println()
+		fmt.Println("   " + yahoo.AuthCodeURL(cfg, "dsotp"))
+		fmt.Println()
+		fmt.Printf("2. Yahoo redirects to %s?code=...  — copy the 'code' value from the URL.\n", redirectURI)
+		fmt.Println("3. Run:  bot yahoo-auth <code>")
+		return
+	}
+
+	ctx := context.Background()
+	token, err := yahoo.Exchange(ctx, cfg, args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "exchange authorization code: %v\n", err)
+		os.Exit(1)
+	}
+	if token.RefreshToken == "" {
+		fmt.Fprintln(os.Stderr, "Yahoo returned no refresh token")
+		os.Exit(1)
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = config.DefaultDBPath
+	}
+	db, err := store.Open(ctx, dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open database %q: %v\n", dbPath, err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	if err := yahoo.SaveToken(ctx, db, token); err != nil {
+		fmt.Fprintf(os.Stderr, "save token: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Success — Yahoo refresh token saved to the database (%s). No env var needed;\n", dbPath)
+	fmt.Println("it persists across reboots/reinstalls and self-updates if Yahoo ever rotates it.")
+}
+
+// runYahooGet fetches a Yahoo Fantasy API resource with the stored token and
+// prints the raw JSON. A debugging aid for capturing real response shapes, e.g.
+// `bot yahoo-get league/nfl.l.12345/standings`.
+func runYahooGet(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: bot yahoo-get <path>  (e.g. league/nfl.l.12345/standings)")
+		os.Exit(2)
+	}
+	clientID := os.Getenv("YAHOO_CLIENT_ID")
+	clientSecret := os.Getenv("YAHOO_CLIENT_SECRET")
+	if clientID == "" || clientSecret == "" {
+		fmt.Fprintln(os.Stderr, "set YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET first")
+		os.Exit(2)
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = config.DefaultDBPath
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open database %q: %v\n", dbPath, err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	// RedirectURI isn't needed for API calls (only for the auth code flow).
+	cfg := yahoo.OAuthConfig(clientID, clientSecret, os.Getenv("YAHOO_REDIRECT_URI"))
+	httpClient, err := yahoo.NewHTTPClient(ctx, cfg, db)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	status, body, err := yahoo.Fetch(ctx, httpClient, args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fetch: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "HTTP %d\n", status)
+
+	var pretty bytes.Buffer
+	if json.Indent(&pretty, body, "", "  ") == nil {
+		fmt.Println(pretty.String())
+	} else {
+		fmt.Println(string(body)) // not JSON; print raw
+	}
 }
 
 // server holds the dependencies each request handler needs.

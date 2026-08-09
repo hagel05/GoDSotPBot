@@ -21,6 +21,15 @@ services:
       # Slack user IDs allowed to run guarded commands (e.g. /recordchampion).
       # Comma-separated, e.g. "U01ABC123,U04XYZ789".
       ADMIN_USER_IDS: ""
+
+      # --- Yahoo integration (Phase B) ---
+      # Set all three to enable the browser auth flow (/yahoo/login, /yahoo/callback).
+      # YAHOO_CLIENT_ID: "dj0y..."
+      # YAHOO_CLIENT_SECRET: "..."                       # secret
+      # YAHOO_REDIRECT_URI: "https://<your-host>/yahoo/callback"
+      # Optional Basic Auth gate on the /yahoo/* pages (recommended):
+      # YAHOO_AUTH_USER: "you"
+      # YAHOO_AUTH_PASS: "a-long-password"               # secret
     volumes:
       # Host path holding league.yaml -> mounted read-only into the container.
       # Edit league.yaml on the host to update draft date/order/etc. (hot-reloads).

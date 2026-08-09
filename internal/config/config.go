@@ -41,6 +41,23 @@ type Config struct {
 	// SlackBotToken is optional today. It is reserved for future features that
 	// post to Slack unprompted (e.g. scheduled standings via chat.postMessage).
 	SlackBotToken string
+
+	// Yahoo OAuth app credentials. When ClientID, ClientSecret, and RedirectURI
+	// are all set, the browser auth flow (/yahoo/login, /yahoo/callback) is enabled.
+	YahooClientID     string
+	YahooClientSecret string
+	YahooRedirectURI  string
+
+	// YahooAuthUser/Pass optionally protect the /yahoo/* auth endpoints with HTTP
+	// Basic Auth at the app layer. When unset, the app applies no gate (rely on a
+	// reverse-proxy gate instead); the state check still protects the callback.
+	YahooAuthUser string
+	YahooAuthPass string
+}
+
+// YahooEnabled reports whether the Yahoo browser auth flow should be served.
+func (c *Config) YahooEnabled() bool {
+	return c.YahooClientID != "" && c.YahooClientSecret != "" && c.YahooRedirectURI != ""
 }
 
 // Load reads configuration from the environment, applies defaults, and
@@ -55,6 +72,11 @@ func Load() (*Config, error) {
 		AdminUserIDs:       parseSet(os.Getenv("ADMIN_USER_IDS")),
 		SlackSigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
 		SlackBotToken:      os.Getenv("SLACK_BOT_TOKEN"),
+		YahooClientID:      os.Getenv("YAHOO_CLIENT_ID"),
+		YahooClientSecret:  os.Getenv("YAHOO_CLIENT_SECRET"),
+		YahooRedirectURI:   os.Getenv("YAHOO_REDIRECT_URI"),
+		YahooAuthUser:      os.Getenv("YAHOO_AUTH_USER"),
+		YahooAuthPass:      os.Getenv("YAHOO_AUTH_PASS"),
 	}
 
 	var missing []string

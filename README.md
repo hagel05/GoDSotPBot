@@ -190,6 +190,55 @@ run `/recordchampion <year> <player>` in Slack as an admin, or
 If you regenerate the Slack signing secret, update `SLACK_SIGNING_SECRET` in the
 TrueNAS app config and restart the app.
 
+## Yahoo integration
+
+Pulling finish order and live scores needs a one-time authorization with your
+Yahoo account (the data is private to a league member). After that the bot is
+autonomous — it stores the refresh token in the database and mints access tokens
+itself.
+
+**Env vars** (Client ID/Secret from your [Yahoo developer app](https://developer.yahoo.com/apps/),
+Fantasy Sports **Read** scope):
+
+| Variable              | Purpose |
+|-----------------------|---------|
+| `YAHOO_CLIENT_ID`     | App client id (consumer key) |
+| `YAHOO_CLIENT_SECRET` | App client secret — **secret** |
+| `YAHOO_REDIRECT_URI`  | Must exactly match the app's Redirect URI. For the browser flow, `https://<your-host>/yahoo/callback` |
+| `YAHOO_AUTH_USER` / `YAHOO_AUTH_PASS` | Optional Basic Auth protecting the `/yahoo/*` pages. Set both to gate the browser flow at the app layer |
+
+Setting all three of the first vars enables the browser auth endpoints.
+
+### Authorize (browser flow — recommended)
+
+1. Set `YAHOO_AUTH_USER`/`YAHOO_AUTH_PASS` so only you can start the flow.
+2. Visit `https://<your-host>/yahoo/login`, enter that user/pass when prompted.
+3. Approve at Yahoo → you're redirected back to `/yahoo/callback` → "✅ Yahoo
+   connected". The refresh token is saved to the DB.
+
+The callback is CSRF-protected by a single-use `state`, so only a flow this bot
+started can complete. You can additionally (or instead) gate `/yahoo/` at your
+reverse proxy — e.g. an NPM Access List or IP allowlist on that path. If no app
+Basic Auth is set, the bot logs a warning that the endpoints are ungated.
+
+### Authorize (CLI fallback)
+
+The image is distroless (no shell), so run the binary directly via `docker exec`
+(env vars are inherited from the container):
+
+```sh
+docker exec dsotp-bot /bot yahoo-auth            # prints the approval URL
+docker exec dsotp-bot /bot yahoo-auth <code>     # exchanges the code, saves token
+```
+
+Either way, if the token is ever revoked just re-authorize — no redeploy needed.
+
+Once authorized, dump a raw API response for debugging with:
+
+```sh
+docker exec dsotp-bot /bot yahoo-get league/<your-league-key>/standings
+```
+
 ## CI/CD
 
 - `.github/workflows/ci.yml` — `go vet`, `go test -race`, `go build` on every push/PR.

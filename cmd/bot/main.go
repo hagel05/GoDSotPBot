@@ -88,6 +88,18 @@ func runServer() {
 	mux.HandleFunc("GET /healthz", server.handleHealth)
 	mux.HandleFunc("POST /slack/commands", server.handleSlashCommand)
 
+	if cfg.YahooEnabled() {
+		oauthCfg := yahoo.OAuthConfig(cfg.YahooClientID, cfg.YahooClientSecret, cfg.YahooRedirectURI)
+		authSrv := yahoo.NewAuthServer(oauthCfg, db, cfg.YahooAuthUser, cfg.YahooAuthPass)
+		mux.HandleFunc("GET /yahoo/login", authSrv.LoginHandler)
+		mux.HandleFunc("GET /yahoo/callback", authSrv.CallbackHandler)
+		if authSrv.BasicAuthConfigured() {
+			slog.Info("Yahoo browser auth enabled at /yahoo/login (Basic Auth protected)")
+		} else {
+			slog.Warn("Yahoo auth endpoints served WITHOUT app Basic Auth; set YAHOO_AUTH_USER/YAHOO_AUTH_PASS or gate /yahoo/ at your reverse proxy")
+		}
+	}
+
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           mux,

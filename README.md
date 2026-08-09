@@ -194,7 +194,8 @@ TrueNAS app config and restart the app.
 
 Pulling finish order and live scores needs a one-time authorization with your
 Yahoo account (the data is private to a league member). After that the bot is
-autonomous.
+autonomous — it stores the refresh token in the database and mints access tokens
+itself.
 
 **Env vars** (Client ID/Secret from your [Yahoo developer app](https://developer.yahoo.com/apps/),
 Fantasy Sports **Read** scope):
@@ -203,20 +204,34 @@ Fantasy Sports **Read** scope):
 |-----------------------|---------|
 | `YAHOO_CLIENT_ID`     | App client id (consumer key) |
 | `YAHOO_CLIENT_SECRET` | App client secret — **secret** |
-| `YAHOO_REDIRECT_URI`  | Must exactly match the Redirect URI registered on the app |
+| `YAHOO_REDIRECT_URI`  | Must exactly match the app's Redirect URI. For the browser flow, `https://<your-host>/yahoo/callback` |
+| `YAHOO_AUTH_USER` / `YAHOO_AUTH_PASS` | Optional Basic Auth protecting the `/yahoo/*` pages. Set both to gate the browser flow at the app layer |
 
-**One-time authorization:**
+Setting all three of the first vars enables the browser auth endpoints.
+
+### Authorize (browser flow — recommended)
+
+1. Set `YAHOO_AUTH_USER`/`YAHOO_AUTH_PASS` so only you can start the flow.
+2. Visit `https://<your-host>/yahoo/login`, enter that user/pass when prompted.
+3. Approve at Yahoo → you're redirected back to `/yahoo/callback` → "✅ Yahoo
+   connected". The refresh token is saved to the DB.
+
+The callback is CSRF-protected by a single-use `state`, so only a flow this bot
+started can complete. You can additionally (or instead) gate `/yahoo/` at your
+reverse proxy — e.g. an NPM Access List or IP allowlist on that path. If no app
+Basic Auth is set, the bot logs a warning that the endpoints are ungated.
+
+### Authorize (CLI fallback)
+
+The image is distroless (no shell), so run the binary directly via `docker exec`
+(env vars are inherited from the container):
 
 ```sh
-# 1. Print the URL to approve (needs the three env vars above set):
-bot yahoo-auth
-# 2. Open it, approve, copy the `code` from the redirected URL, then:
-bot yahoo-auth <code>
+docker exec dsotp-bot /bot yahoo-auth            # prints the approval URL
+docker exec dsotp-bot /bot yahoo-auth <code>     # exchanges the code, saves token
 ```
 
-The resulting **refresh token is saved to the database** (not an env var), so it
-survives reboots/reinstalls and self-updates if Yahoo ever rotates it. If it's
-ever revoked, just re-run `bot yahoo-auth`.
+Either way, if the token is ever revoked just re-authorize — no redeploy needed.
 
 ## CI/CD
 
